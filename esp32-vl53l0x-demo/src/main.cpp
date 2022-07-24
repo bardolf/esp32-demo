@@ -18,7 +18,7 @@ void setup() {
   }
   // power
   Serial.println(F("VL53L0X API Continuous Ranging example\n\n"));
-
+  pinMode(LED_BUILTIN, OUTPUT);
   // start continuous ranging
   lox.setMeasurementTimingBudgetMicroSeconds(20000);
   lox.startRangeContinuous();
@@ -26,11 +26,14 @@ void setup() {
 
 void loop() {
   if (lox.isRangeComplete()) {
-    // Serial.print("Distance in mm: ");
     uint16_t distance = lox.readRange();
     if (distance < 500) {
-      Serial.print("HERE ");
+      digitalWrite(LED_BUILTIN, HIGH);
+      Serial.print(micros()/1000);
+      Serial.print(" distance in mm: ");
       Serial.println(distance);
+    } else {
+      digitalWrite(LED_BUILTIN, LOW);
     }
   }
 }
