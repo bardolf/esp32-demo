@@ -4,7 +4,7 @@
 #define NUM_LEDS 1
 
 #define DATA_PIN_ONBOARD 5
-#define DATA_PIN_EXT_D6 14
+#define DATA_PIN_EXT_D6 26
 
 #define DATA_PIN DATA_PIN_EXT_D6
 
