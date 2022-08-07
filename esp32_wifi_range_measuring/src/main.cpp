@@ -1,14 +1,22 @@
 #include <Arduino.h>
 #include <Bounce2.h>
+#include <FastLED.h>
 #include <WiFi.h>
 #include <Wire.h>
 #include <esp_now.h>
 
 #include "logging.h"
 
-#define DEVICE_TYPE 0  // defines whether is it start (0) or finish (1) device
-#define BOUNCE_PIN 27  // onboard button
-#define LED_PIN 2      // oboard led
+#define DEVICE_TYPE 1   // defines whether is it start (0) or finish (1) device
+#define BOUNCE_PIN 27   // onboard button
+#define LED_PIN 2       // onboard led
+#define RDG_DATA_PIN 5  // onboard rgb led
+
+typedef struct struct_message {
+    char text[8];
+    unsigned long time;
+    byte retry;
+} struct_message;
 
 // uint8_t startDeviceAddress[] = {0x08, 0x3A, 0xF2, 0x3A, 0x82, 0x30};
 uint8_t startDeviceAddress[] = {0x08, 0x3A, 0xF2, 0x3A, 0x81, 0x60};
@@ -16,13 +24,7 @@ uint8_t finishDeviceAddress[] = {0x08, 0x3A, 0xF2, 0x3A, 0x81, 0xFC};
 
 Bounce bounce = Bounce();
 int ledState = LOW;
-
-typedef struct struct_message {
-    byte state;
-} struct_message;
-
-struct_message readMessage;
-struct_message sentMessage;
+CRGB leds[1];
 
 esp_now_peer_info_t peerInfo;
 
@@ -38,21 +40,24 @@ boolean isStartDevice() {
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
     if (status == ESP_NOW_SEND_FAIL) {
         Log.errorln("Delivery failed");
+        leds[0] = CRGB::Red;
+        FastLED.show();
     }
 }
 
 // Callback when data is received
-void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
+void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {    
+    struct_message readMessage;
     memcpy(&readMessage, incomingData, sizeof(readMessage));
-
+    Log.noticeln("Received message %s - %d - %d", readMessage.text, readMessage.retry, readMessage.time);
+    
     if (isStartDevice()) {
         ledState = !ledState;
-        digitalWrite(LED_PIN, ledState);
-    } else {
-        sentMessage.state = readMessage.state + 1;
-        esp_err_t result = esp_now_send(startDeviceAddress, (uint8_t *)&sentMessage, sizeof(sentMessage));
-    }
-    Log.noticeln("Message received.");
+        digitalWrite(LED_PIN, ledState);        
+    } else {       
+        strcpy(readMessage.text, "BYE\0"); 
+        esp_err_t result = esp_now_send(startDeviceAddress, (uint8_t *)&readMessage, sizeof(readMessage));
+    }    
 }
 
 uint8_t *getPeerAddress() {
@@ -73,6 +78,9 @@ void setup() {
     Log.setShowLevel(false);
     Log.infoln("START");
 
+    // init rgb led
+    FastLED.addLeds<NEOPIXEL, RDG_DATA_PIN>(leds, 1);
+
     if (isStartDevice()) {
         bounce.attach(BOUNCE_PIN, INPUT_PULLUP);
         bounce.interval(10);
@@ -87,7 +95,7 @@ void setup() {
         return;
     }
     // Print MAC Address to Serial monitor
-    Log.noticeln("MAC Address: %s", WiFi.macAddress().c_str());    
+    Log.noticeln("MAC Address: %s", WiFi.macAddress().c_str());
 
     esp_now_register_send_cb(OnDataSent);
 
@@ -112,9 +120,15 @@ void loop() {
     if (isStartDevice()) {
         if (bounce.changed()) {
             int deboucedInput = bounce.read();
-            if (deboucedInput == LOW) {              
+            if (deboucedInput == LOW) {
+                FastLED.clear(true);
                 Log.infoln("Sending data...");
-                esp_err_t result = esp_now_send(finishDeviceAddress, (uint8_t *)&sentMessage, sizeof(sentMessage));
+
+                struct_message message;
+                strcpy(message.text, "HELLO!\0");
+                message.retry = 0;
+                message.time = 912345678ul;
+                esp_err_t result = esp_now_send(finishDeviceAddress, (uint8_t *)&message, sizeof(message));
                 if (result != ESP_OK) {
                     Log.errorln("Error sending the data");
                 }
