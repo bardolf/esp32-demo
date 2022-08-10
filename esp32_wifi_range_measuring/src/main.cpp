@@ -7,16 +7,19 @@
 
 #include "logging.h"
 
-#define DEVICE_TYPE 1   // defines whether is it start (0) or finish (1) device
+#define DEVICE_TYPE 0   // defines whether is it start (0) or finish (1) device
 #define BOUNCE_PIN 27   // onboard button
 #define LED_PIN 2       // onboard led
 #define RDG_DATA_PIN 5  // onboard rgb led
 
-typedef struct struct_message {
+typedef struct Message {
     char text[8];
     unsigned long time;
     byte retry;
-} struct_message;
+} Message;
+
+// settings
+static const int sendQueueLen = 2;
 
 // uint8_t startDeviceAddress[] = {0x08, 0x3A, 0xF2, 0x3A, 0x82, 0x30};
 uint8_t startDeviceAddress[] = {0x08, 0x3A, 0xF2, 0x3A, 0x81, 0x60};
@@ -25,6 +28,7 @@ uint8_t finishDeviceAddress[] = {0x08, 0x3A, 0xF2, 0x3A, 0x81, 0xFC};
 Bounce bounce = Bounce();
 int ledState = LOW;
 CRGB leds[1];
+static QueueHandle_t sendQueue;
 
 esp_now_peer_info_t peerInfo;
 
@@ -46,18 +50,18 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
 }
 
 // Callback when data is received
-void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {    
-    struct_message readMessage;
+void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
+    Message readMessage;
     memcpy(&readMessage, incomingData, sizeof(readMessage));
     Log.noticeln("Received message %s - %d - %d", readMessage.text, readMessage.retry, readMessage.time);
-    
+
     if (isStartDevice()) {
         ledState = !ledState;
-        digitalWrite(LED_PIN, ledState);        
-    } else {       
-        strcpy(readMessage.text, "BYE\0"); 
+        digitalWrite(LED_PIN, ledState);
+    } else {
+        strcpy(readMessage.text, "BYE\0");
         esp_err_t result = esp_now_send(startDeviceAddress, (uint8_t *)&readMessage, sizeof(readMessage));
-    }    
+    }
 }
 
 uint8_t *getPeerAddress() {
@@ -67,8 +71,50 @@ uint8_t *getPeerAddress() {
     return startDeviceAddress;
 }
 
+// void blinkTask(void *pvParameters) {
+//     while (1) {
+//         digitalWrite(LED_PIN, HIGH);
+//         vTaskDelay(500 / portTICK_PERIOD_MS);
+//         digitalWrite(LED_PIN, LOW);
+//         vTaskDelay(233 / portTICK_PERIOD_MS);
+//     }
+// }
+
+void readButtonTask(void *pvParameters) {
+    while (1) {
+        vTaskDelay(50 / portTICK_PERIOD_MS);
+        bounce.update();
+        if (bounce.changed()) {
+            int deboucedInput = bounce.read();
+            if (deboucedInput == LOW) {
+                FastLED.clear(true);
+                Message message;
+                strcpy(message.text, "HELLO!\0");
+                message.retry = 0;
+                message.time = 912345678ul;
+                if (xQueueSend(sendQueue, &message, 0) != pdTRUE) {
+                    Log.errorln("Problem while putting a message to a queue, queue is full?");
+                }
+            }
+        }
+    }
+}
+
+void sendTask(void *pvParameters) {
+    Message message;
+    while (1) {        
+        if (xQueueReceive(sendQueue, &message, 10000) == pdTRUE) {
+            Log.infoln("Sending data... %s", message.text);
+            esp_err_t result = esp_now_send(finishDeviceAddress, (uint8_t *)&message, sizeof(message));
+            if (result != ESP_OK) {
+                Log.errorln("Error sending the data");
+            }
+        }
+    }
+}
+
 void setup() {
-    Serial.begin(921600);
+    Serial.begin(115200);
 
     // initialize logging
     while (!Serial && !Serial.available()) {
@@ -112,27 +158,17 @@ void setup() {
         return;
     }
     esp_now_register_recv_cb(OnDataRecv);
+
+    sendQueue = xQueueCreate(sendQueueLen, sizeof(Message));
+
+    // xTaskCreatePinnedToCore(blinkTask, "Blink Task", 1024, NULL, 3, NULL, ARDUINO_RUNNING_CORE);
+    if (isStartDevice()) {
+        xTaskCreatePinnedToCore(readButtonTask, "Read Button Task", 2024, NULL, 3, NULL, ARDUINO_RUNNING_CORE);
+        xTaskCreatePinnedToCore(sendTask, "Send Task", 2024, NULL, 3, NULL, ARDUINO_RUNNING_CORE);
+    }
 }
 
 void loop() {
-    bounce.update();
-
-    if (isStartDevice()) {
-        if (bounce.changed()) {
-            int deboucedInput = bounce.read();
-            if (deboucedInput == LOW) {
-                FastLED.clear(true);
-                Log.infoln("Sending data...");
-
-                struct_message message;
-                strcpy(message.text, "HELLO!\0");
-                message.retry = 0;
-                message.time = 912345678ul;
-                esp_err_t result = esp_now_send(finishDeviceAddress, (uint8_t *)&message, sizeof(message));
-                if (result != ESP_OK) {
-                    Log.errorln("Error sending the data");
-                }
-            }
-        }
-    }
+    // ideally do nothing
+    vTaskDelay(10000 / portTICK_PERIOD_MS);
 }
