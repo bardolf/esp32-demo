@@ -5,7 +5,7 @@
 #include "Adafruit_VL53L0X.h"
 #include "BluetoothSerial.h"
 
-#define TIMING_BUDGET 30000
+#define TIMING_BUDGET 20000
 #define RANGE_THRESHOLD 600
 
 Adafruit_VL53L0X lox = Adafruit_VL53L0X();
@@ -31,15 +31,15 @@ void setup() {
 
 
     // start continuous ranging
-    lox.setMeasurementTimingBudgetMicroSeconds(TIMING_BUDGET);
     lox.configSensor(lox.VL53L0X_SENSE_HIGH_SPEED);
+    lox.setMeasurementTimingBudgetMicroSeconds(TIMING_BUDGET);    
     lox.startRangeContinuous();
 }
 
 void loop() {
     if (lox.isRangeComplete()) {
         uint16_t distance = lox.readRange();
-        if (distance < 500) {
+        if (distance < RANGE_THRESHOLD) {
             Log.infoln("%d Distance: %d", millis(), distance);
             String s = String(millis()) + " range " + String(distance) + "mm ";
             serialBT.println(s);          
