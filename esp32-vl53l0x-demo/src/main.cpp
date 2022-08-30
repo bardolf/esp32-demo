@@ -4,12 +4,36 @@
 
 #include "Adafruit_VL53L0X.h"
 #include "BluetoothSerial.h"
+#include "detector.h"
 
 #define TIMING_BUDGET 20000
 #define RANGE_THRESHOLD 600
 
-Adafruit_VL53L0X lox = Adafruit_VL53L0X();
 BluetoothSerial serialBT;
+Detector detector;
+
+void updateDetectorTask(void *pvParameters) {
+    while (1) {
+        detector.update();
+        vTaskDelay(5 / portTICK_PERIOD_MS);
+    }
+}
+
+void readDetectorTask(void *pvParameters) {
+    while (1) {
+        if (detector.isObjectArrived()) {
+            Log.infoln("Object arrived.");
+            String s = String("Object arrived");
+            serialBT.println(s);
+        }
+        if (detector.isObjectLeft()) {
+            Log.infoln("Object left.");
+            String s = String("Object left");
+            serialBT.println(s);
+        }
+        vTaskDelay(3 / portTICK_PERIOD_MS);
+    }
+}
 
 void setup() {
     Serial.begin(115200);
@@ -22,31 +46,18 @@ void setup() {
     Log.infoln("START");
 
     Log.infoln("Adafruit VL53L0X test.");
-    if (!lox.begin()) {
+    if (!detector.init()) {
         Log.errorln("Failed to boot VL53L0X");
         while (1)
             ;
     }
     serialBT.begin("ESP32BT_TEST");  // Bluetooth device name
 
-
-    // start continuous ranging
-    lox.configSensor(lox.VL53L0X_SENSE_HIGH_SPEED);
-    lox.setMeasurementTimingBudgetMicroSeconds(TIMING_BUDGET);    
-    lox.startRangeContinuous();
+    xTaskCreatePinnedToCore(updateDetectorTask, "Upd. detector", 8000, NULL, 4, NULL, ARDUINO_RUNNING_CORE);
+    xTaskCreatePinnedToCore(readDetectorTask, "Read detector", 8000, NULL, 4, NULL, ARDUINO_RUNNING_CORE);
+    detector.startMeasurement();
 }
 
 void loop() {
-    if (lox.isRangeComplete()) {
-        uint16_t distance = lox.readRange();
-        if (distance < RANGE_THRESHOLD) {
-            Log.infoln("%d Distance: %d", millis(), distance);
-            String s = String(millis()) + " range " + String(distance) + "mm ";
-            serialBT.println(s);          
-        } else {
-            Log.infoln("%d No object detected.", millis());
-        }
-    } else {
-        // Log.noticeln("%d not ready yet.", millis());
-    }
+    vTaskDelay(10000 / portTICK_PERIOD_MS);  // do nothing in loop
 }
