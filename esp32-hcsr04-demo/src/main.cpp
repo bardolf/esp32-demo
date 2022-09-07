@@ -1,35 +1,37 @@
 #include <Arduino.h>
 
+#include "detector.h"
 #include "logging.h"
 
-const int trigPin = 26;  
-const int echoPin = 25;  
+Detector detector;
 
-#define SOUND_SPEED 0.034  // definice rychlosti zvuku (cm/us)
-
-long duration;     
-float distanceCm;  
-
-void setup() {
-    Serial.begin(115200);      
-    pinMode(trigPin, OUTPUT);  
-    pinMode(echoPin, INPUT_PULLDOWN);   
+void readDetectorTask(void *pvParameters) {
+    while (1) {
+        DetectedObjectState detectedObjectState = detector.read();
+        if (detectedObjectState == ARRIVED) {
+            Log.infoln("%d object arrived", millis());
+        } else if (detectedObjectState == LEFT) {
+            Log.infoln("%d object left", millis());
+        }
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
 }
 
-// funkce LOOP bezi stale dokola.
-void loop() {
-    digitalWrite(trigPin, LOW);   // nastaveni TRIG na uroven LOW
-    delayMicroseconds(2);         // 2us pockat, aby se se LOW ustalilo
-    digitalWrite(trigPin, HIGH);  // zacatek 10us startovniho pulzu (TRIG na HIGH)
-    delayMicroseconds(10);        // cekani 10us
-    digitalWrite(trigPin, LOW);   // konec start pulze (trig na LOW)
-    duration = pulseIn(echoPin, HIGH);  // urci pocet us stavu HIGH na pinu ECHO
+void setup() {
+    Serial.begin(115200);
 
-    distanceCm = duration * SOUND_SPEED / 2;  // vypocet vzdalenosti z casu a rychlosti
-    if (distanceCm < 100) {
-        Serial.print(millis());
-        Serial.print(" object detected [cm]: ");
-        Serial.println(distanceCm);
+    // initialize logging
+    while (!Serial && !Serial.available()) {
     }
-    delay(10);  // 5s pocakt, pak nasleduje dalsi mereni
+    Log.begin(LOG_LEVEL_INFO, &Serial);
+    Log.setShowLevel(true);
+    Log.infoln("START");
+
+    detector.init();
+    detector.startMeasurement();
+    xTaskCreatePinnedToCore(readDetectorTask, "Read detector", 8000, NULL, 4, NULL, ARDUINO_RUNNING_CORE);
+}
+
+void loop() {
+    vTaskDelay(10000 / portTICK_PERIOD_MS);  // do nothing in loop
 }
