@@ -3,7 +3,7 @@
 
 #include "logging.h"
 
-#define BOUNCE_PIN 25  // onboard button
+#define BOUNCE_PIN 0  // ext. button  D5
 #define LED_PIN 2      // onboard led
 
 Bounce bounce = Bounce();
