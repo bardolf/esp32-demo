@@ -22,8 +22,15 @@ typedef struct Message {
 // settings
 static const int sendQueueLen = 2;
 
+<<<<<<< Updated upstream
 uint8_t startDeviceAddress[] = {0x08, 0x3A, 0xF2, 0x3A, 0x81, 0xFC};   // white
 uint8_t finishDeviceAddress[] = {0x08, 0x3A, 0xF2, 0x3A, 0x81, 0x60};  // red
+=======
+// uint8_t startDeviceAddress[] = {0x08, 0x3A, 0xF2, 0x3A, 0x82, 0x30};
+uint8_t startDeviceAddress[] = {0x08, 0x3A, 0xF2, 0x3A, 0x81, 0xFC};
+// uint8_t finishDeviceAddress[] = {0x08, 0x3A, 0xF2, 0x3A, 0x81, 0x60};
+uint8_t finishDeviceAddress[] = {0x08, 0x3A, 0xF2, 0x3A, 0x5D, 0xA0};
+>>>>>>> Stashed changes
 
 Bounce bounce = Bounce();
 int ledState = LOW;
@@ -102,7 +109,7 @@ void readButtonTask(void *pvParameters) {
 
 void sendTask(void *pvParameters) {
     Message message;
-    while (1) {        
+    while (1) {
         if (xQueueReceive(sendQueue, &message, 10000) == pdTRUE) {
             Log.infoln("Sending data... %s", message.text);
             esp_err_t result = esp_now_send(finishDeviceAddress, (uint8_t *)&message, sizeof(message));
@@ -136,7 +143,7 @@ void setup() {
     }
 
     WiFi.mode(WIFI_MODE_STA);
-    // esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_LR);
+    esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_LR);
     if (esp_now_init() != ESP_OK) {
         Log.errorln("Error initializing ESP-NOW");
         return;

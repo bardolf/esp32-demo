@@ -1,50 +1,27 @@
-#include <Arduino.h>
-#include <Bounce2.h>
+#include <WiFi.h>
 
-#include "logging.h"
+// Replace with your network credentials (STATION)
+const char* ssid = "skybit.cz.guest";
+const char* password = "vitejteunemcu";
 
-#define BOUNCE_PIN 0  // ext. button  D5
-#define LED_PIN 2      // onboard led
-
-Bounce bounce = Bounce();
-uint8_t ledState = LOW;
-
-void readButtonTask(void *pvParameters) {
-    while (1) {
-        vTaskDelay(50 / portTICK_PERIOD_MS);
-        bounce.update();
-        if (bounce.changed()) {
-            Log.infoln("CHNAGED");
-            int deboucedInput = bounce.read();
-            if (deboucedInput == LOW) {
-                ledState = !ledState;
-                digitalWrite(LED_PIN, ledState);
-            }
-        }
+void initWiFi() {
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
+    Serial.print("Connecting to WiFi ..");
+    while (WiFi.status() != WL_CONNECTED) {
+        Serial.print('.');
+        delay(1000);
     }
+    Serial.println(WiFi.localIP());
 }
 
 void setup() {
     Serial.begin(115200);
-
-    // initialize logging
-    while (!Serial && !Serial.available()) {
-    }
-    Log.begin(LOG_LEVEL_VERBOSE, &Serial);
-    Log.setPrefix(printPrefix);
-    Log.setShowLevel(false);
-    Log.infoln("START");
-
-    bounce.attach(BOUNCE_PIN, INPUT_PULLUP);
-    bounce.interval(10);
-
-    pinMode(LED_PIN, OUTPUT);
-    digitalWrite(LED_PIN, ledState);
-
-    xTaskCreatePinnedToCore(readButtonTask, "Read Button Task", 2024, NULL, 3, NULL, ARDUINO_RUNNING_CORE);
+    initWiFi();
 }
 
 void loop() {
-    // ideally do nothing
-    vTaskDelay(10000 / portTICK_PERIOD_MS);
+    Serial.print("RRSI: ");
+    Serial.println(WiFi.RSSI());
+    delay(1000);
 }
