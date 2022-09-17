@@ -4,11 +4,12 @@
 #include <WiFi.h>
 #include <Wire.h>
 #include <esp_now.h>
+#include <esp_wifi.h>
 
 #include "logging.h"
 
-#define DEVICE_TYPE 0   // defines whether is it start (0) or finish (1) device
-#define BOUNCE_PIN 27   // onboard button
+#define DEVICE_TYPE 1   // defines whether is it start (0) or finish (1) device
+#define BOUNCE_PIN 0   // onboard button
 #define LED_PIN 2       // onboard led
 #define RDG_DATA_PIN 5  // onboard rgb led
 
@@ -21,9 +22,8 @@ typedef struct Message {
 // settings
 static const int sendQueueLen = 2;
 
-// uint8_t startDeviceAddress[] = {0x08, 0x3A, 0xF2, 0x3A, 0x82, 0x30};
-uint8_t startDeviceAddress[] = {0x08, 0x3A, 0xF2, 0x3A, 0x81, 0x60};
-uint8_t finishDeviceAddress[] = {0x08, 0x3A, 0xF2, 0x3A, 0x81, 0xFC};
+uint8_t startDeviceAddress[] = {0x08, 0x3A, 0xF2, 0x3A, 0x81, 0xFC};   // white
+uint8_t finishDeviceAddress[] = {0x08, 0x3A, 0xF2, 0x3A, 0x81, 0x60};  // red
 
 Bounce bounce = Bounce();
 int ledState = LOW;
@@ -136,6 +136,7 @@ void setup() {
     }
 
     WiFi.mode(WIFI_MODE_STA);
+    // esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_LR);
     if (esp_now_init() != ESP_OK) {
         Log.errorln("Error initializing ESP-NOW");
         return;

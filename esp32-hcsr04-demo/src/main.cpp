@@ -2,8 +2,10 @@
 
 #include "detector.h"
 #include "logging.h"
+#include "BluetoothSerial.h"
 
 Detector detector;
+BluetoothSerial serialBT;
 
 void readDetectorTask(void *pvParameters) {
     while (1) {
@@ -27,7 +29,9 @@ void setup() {
     Log.setShowLevel(true);
     Log.infoln("START");
 
-    detector.init();
+     serialBT.begin("ESP32BT_TEST");  // Bluetooth device name
+
+    detector.init(&serialBT);
     detector.startMeasurement();
     xTaskCreatePinnedToCore(readDetectorTask, "Read detector", 8000, NULL, 4, NULL, ARDUINO_RUNNING_CORE);
 }
